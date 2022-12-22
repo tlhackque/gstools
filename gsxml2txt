@@ -8,7 +8,7 @@ use strict;
 my $copyright =
     "Copyright (c) 2022 Timothe Litt litt _at acm.org\nUse --man for license.";
 
-our $VERSION = 'V0.0.0';
+our $VERSION = 'V0.0.1';
 
 my $default_template = 'gs_config_template.txt';
 
@@ -132,6 +132,7 @@ while( @ARGV ) {
         $sts = 1;
     };
 }
+close $t;
 exit( $sts );
 
 __END__
