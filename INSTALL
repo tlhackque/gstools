@@ -1,0 +1,14 @@
+To install:
+
+The current tools do not have a system-wide installer.
+
+Make sure Perl is installed.
+
+Non-core modules required:
+
+XML::Simple
+
+Use cpan install <module> or obtain from your distribution.
+
+
+

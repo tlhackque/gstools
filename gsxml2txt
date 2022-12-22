@@ -1,0 +1,252 @@
+#!/usr/bin/perl
+
+# update Grandstream device template from XML configuration.
+
+use warnings;
+use strict;
+
+my $copyright =
+    "Copyright (c) 2022 Timothe Litt litt _at acm.org\nUse --man for license.";
+
+our $VERSION = 'V0.0.0';
+
+my $default_template = 'gs_config_template.txt';
+
+use Cwd(   qw/realpath/ );
+use Fcntl( qw/:seek/ );
+use File::Basename;
+use Getopt::Long( qw(:config bundling) );
+use XML::Simple;
+
+my $SELF = basename( $0 );
+
+my( $extra, $template, $replace, $help, $man, $version );
+
+GetOptions(
+        'extra|x!'   => \$extra,
+        'replace|r!' => \$replace,
+        'template|t' => \$template,
+        'help|h'     => \$help,
+        'man'        => \$man,
+        'version|v'  => \$version,
+          ) or die( "Error in command\n" );
+
+# Handle help, man, & version
+if( $help || $man ) {
+    eval {
+        no warnings 'once';
+        $Pod::Usage::Formatter = 'Pod::Text::Termcap';
+        require Pod::Usage;
+    } or
+        die( "Install Pod::Usage or use 'perldoc $0'\n" );
+    Pod::Usage::pod2usage( 1 )                            if $help;
+    Pod::Usage::pod2usage( -exitval => 0, -verbose => 2 ) if $man;
+}
+
+if( $version ) {
+    printf( "%s version %s\n%s\n", $SELF, $VERSION, $copyright );
+    exit 0;
+}
+
+unless( defined $template ) {
+    if( defined $ENV{GSTEMPLATE} ) {
+        $template = $ENV{GSTEMPLATE};
+    } elsif( -f $default_template ) {
+        $template = $default_template;
+    } else {
+        die("No template specified.  Use --template, define GSTEMPLATE, or setup $default_template\n"
+           );
+    }
+}
+
+open( my $t, '<', $template ) or die( "$template: $!\n" );
+
+my $sts = 0;
+
+while( @ARGV ) {
+    my $file = shift @ARGV;
+
+    die( "$file: $!\n" )
+        unless( -f $file );
+
+    my $x   = XML::Simple->new( SuppressEmpty => '' );
+    my $xml = $x->XMLin( $file );
+
+    unless( defined $xml->{version} && $xml->{version} == 1 ) {
+        print STDERR ( "$file: Not a version 1 XML file\n" );
+        $sts = 1;
+        next;
+    }
+    my $mac = $xml->{mac};
+    if( defined $mac ) {
+        $mac =~ s/(..)/$1:/g;
+        chop $mac;
+    } else {
+        $mac = "<not present>";
+    }
+    my $cfg = $xml->{config};
+
+    seek( $t, 0, SEEK_SET );
+
+    my $outname = basename( $file, qw/.xml .XML/ ) . '.txt';
+    if( -f $outname && !$replace ) {
+        print STDERR ( "$outname: file exists.  To supersede, use --replace\n" );
+        $sts = 1;
+        next;
+    }
+    open( my $txt, '>', $outname ) or do {
+        print STDERR ( "$outname: $!\n" );
+        $sts = 1;
+        next;
+    };
+
+    printf $txt ( "# #*********************** *\n" . "# # Data from %s\n" .
+                  "# # For MAC: %s\n" . "# #*********************** *\n", $file, $mac );
+
+    while( <$t> ) {
+        if( /^\s*(?:#\s*)?(P\d+)\s*=\s*(.*?)\s*$/ ) {
+            my( $p, $v ) = ( $1, $2 );
+            if( defined $cfg->{$p} ) {
+                if( $v eq $cfg->{$p} ) {
+                    print $txt ( $_ );
+                } else {
+                    printf $txt ( "#%s%s=%s\n", $_, $p, $cfg->{$p} );
+                }
+                delete $cfg->{$p};
+            } else {
+                printf $txt ( "# Not in XML\n%s", $_ );
+            }
+        } else {
+            print $txt ( $_ );
+        }
+    }
+    if( $extra && keys %$cfg ) {
+        printf $txt ( "\n\n# #### XML parameters not present in %s\n",
+                      realpath( $template ) );
+        foreach my $p ( sort keys %$cfg ) {
+            printf $txt ( "%s=%s\n", $p, $cfg->{$p} );
+        }
+    }
+    close( $txt ) or do {
+        print STDERR ( "$outname: $!n" );
+        $sts = 1;
+    };
+}
+exit( $sts );
+
+__END__
+
+=pod
+
+=head1 NAME
+
+gsxml2txt - update Grandstream device template from XML configuration.
+
+=head1 SYNOPSIS
+
+ gsxml2txt [options] file.xml [...]
+
+      --extra     --replace   --template
+      --help      --man       --version
+
+=head1 DESCRIPTION
+
+I<gsxml2txt> parses the XML file downloaded from a Grandstream device
+and uses the values to update the template that defines their functions.
+
+In the updated template, if the XML value differs from the template, the
+template's value is commented out, and the XML value is inserted.
+
+If the XML does not contain a value for a parameter in the template, a
+comment is added to the updated template.
+
+If the XML contains parmeters not in the template, the B<--extra> option
+will report them at the end of the updated template.
+
+The output file(s) will have the same name as the input file, but with a
+F<.txt> extension.
+
+This is used to determine what the XML settings mean.  In addition, it
+provides the values in a fixed order, enabling a meaningful diff between
+the configurations of two or more devices.
+
+=head1 OPTIONS
+
+The following options are supported:
+
+=over 4
+
+=item B<-x> B<--extra>
+
+Report parameters found in XML file that are not in the template.
+
+=item B<-r> B<--replace>
+
+If the output file exists, replace it.  (The default is not to process the XML file.)
+
+=item B<-t> B<--template>=I<FILE>
+
+Specifies the template file to be used.
+
+If not specified, the F<GSTEMPLATE> enfironment variable is used.
+
+If neither B<--template> no F<GSTEMPLATE> is define, F<gs_config_template.txt>
+is used.  This can be a softlink to the current template version, which changes with each
+firmware release.
+
+=item B<--version>
+
+Displays the version number of I<gsxml2txt>.
+
+=item B<--help>
+
+Displays the help sections of the manual.
+
+=item B<--man>
+
+Displays the manual.
+
+=back
+
+=head1 BUGS
+
+Report any bugs, feature requests and/or patches on the issue tracker,
+located at F<https://github.com/tlhackque/gstools/issues>.  In the
+event that the project moves, contact the author directly.
+
+=head1 AUTHOR
+
+Timothe Litt  E<lt>litt@acm.orgE<gt>
+
+=head1 COPYRIGHT and LICENSE
+
+Copyright (c) 2022 Timothe Litt
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+Except as contained in this notice, the name of the author shall not be
+used in advertising or otherwise to promote the sale, use or other dealings
+in this Software without prior written authorization from the author.
+
+Any modifications to this software must be clearly documented by and
+attributed to their author, who is responsible for their effects.
+
+Bug reports, suggestions and patches are welcomed by the original author.
+
+=cut

@@ -1,0 +1,15 @@
+*~
+*#
+.#*
+*_config_*.txt
+*-config.txt*
+*.xml
+*.swp
+*.tmp
+*.bak
+*.log
+*.tdy
+tmp/*
+*.tgz
+*.sig
+*.tar.gz *.tar.xz
