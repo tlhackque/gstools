@@ -8,7 +8,7 @@ use strict;
 my $copyright =
     "Copyright (c) 2022 Timothe Litt litt _at acm.org\nUse --man for license.";
 
-our $VERSION = 'V0.0.1';
+our $VERSION = 'V0.0.2';
 
 my $default_template = 'gs_config_template.txt';
 
@@ -20,10 +20,12 @@ use XML::Simple;
 
 my $SELF = basename( $0 );
 
-my( $extra, $template, $replace, $help, $man, $version );
+my( $extra, $header, $keep, $template, $replace, $help, $man, $version );
 
 GetOptions(
         'extra|x!'   => \$extra,
+        'header|h!'  => \$header,
+        'keep|k!'    => \$keep,
         'replace|r!' => \$replace,
         'template|t' => \$template,
         'help|h'     => \$help,
@@ -58,13 +60,15 @@ unless( defined $template ) {
            );
     }
 }
+$template = realpath( $template );
+$header   = 1 unless( defined $header );
 
 open( my $t, '<', $template ) or die( "$template: $!\n" );
 
 my $sts = 0;
 
 while( @ARGV ) {
-    my $file = shift @ARGV;
+    my $file = realpath( shift @ARGV );
 
     die( "$file: $!\n" )
         unless( -f $file );
@@ -89,6 +93,8 @@ while( @ARGV ) {
     seek( $t, 0, SEEK_SET );
 
     my $outname = basename( $file, qw/.xml .XML/ ) . '.txt';
+    $outname = dirname( $file ) . ( $^O eq 'MSWin32' ? '\\' : '/' ) . $outname
+        if( $keep );
     if( -f $outname && !$replace ) {
         print STDERR ( "$outname: file exists.  To supersede, use --replace\n" );
         $sts = 1;
@@ -100,8 +106,22 @@ while( @ARGV ) {
         next;
     };
 
-    printf $txt ( "# #*********************** *\n" . "# # Data from %s\n" .
-                  "# # For MAC: %s\n" . "# #*********************** *\n", $file, $mac );
+    if( $header ) {
+        my $w =
+            length( $file ) > length( $template ) ? length( $file ) : length( $template );
+        $w = length( $mac ) if( length( $mac ) > $w );
+        my $ws = '*' x $w;
+        #<<<
+        printf $txt ( "#-#************%s *\n" .
+                      "#-# Data from: %s %s*\n" .
+                      "#-# Template : %s %s*\n" .
+                      "#-# For MAC  : %s %s*\n" .
+                      "#-#************%s *\n",
+                      $ws, $file, ' ' x ($w - length( $file )),
+                      $template,  ' ' x ($w - length( $template )),
+                      $mac,       ' ' x ($w - length( $mac )), $ws );
+        #>>>
+    }
 
     while( <$t> ) {
         if( /^\s*(?:#\s*)?(P\d+)\s*=\s*(.*?)\s*$/ ) {
@@ -121,8 +141,9 @@ while( @ARGV ) {
         }
     }
     if( $extra && keys %$cfg ) {
-        printf $txt ( "\n\n# #### XML parameters not present in %s\n",
-                      realpath( $template ) );
+        printf $txt (
+                "\n\n# #### XML parameters not present in %s\n",
+                $template );
         foreach my $p ( sort keys %$cfg ) {
             printf $txt ( "%s=%s\n", $p, $cfg->{$p} );
         }
@@ -147,12 +168,12 @@ gsxml2txt - update Grandstream device template from XML configuration.
 
  gsxml2txt [options] file.xml [...]
 
-      --extra     --replace   --template
-      --help      --man       --version
+      --extra  --header  --keep     --replace  --template
+      --help   --man     --version
 
 =head1 DESCRIPTION
 
-I<gsxml2txt> parses the XML file downloaded from a Grandstream device
+I<gsxml2txt> parses XML files downloaded from Grandstream devices
 and uses the values to update the template that defines their functions.
 
 In the updated template, if the XML value differs from the template, the
@@ -164,14 +185,20 @@ comment is added to the updated template.
 If the XML contains parmeters not in the template, the B<--extra> option
 will report them at the end of the updated template.
 
-The output file(s) will have the same name as the input file, but with a
-F<.txt> extension.
+If more than one XML file is specified, each is processed separately.
+
+Each output file will have the same name as the corresponding input file,
+but with a F<.txt> extension.  It will be located in the current working
+directory unless B<--keep> is used.
 
 This is used to determine what the XML settings mean.  In addition, it
 provides the values in a fixed order, enabling a meaningful diff between
 the configurations of two or more devices.
 
 =head1 OPTIONS
+
+Boolean options may be negated (B<--I<no->option>) if desired, e.g. to
+override an alias or default.  Defaults are subject to change.
 
 The following options are supported:
 
@@ -180,6 +207,16 @@ The following options are supported:
 =item B<-x> B<--extra>
 
 Report parameters found in XML file that are not in the template.
+
+=item B<-h> B<--header>
+
+Include a traceability header in the output file.  (default)
+
+=item B<-k> B<--keep>
+
+When generating an output filename, keep the path of the input file.
+
+The default is to write the output files to the current working directory.
 
 =item B<-r> B<--replace>
 
@@ -191,7 +228,7 @@ Specifies the template file to be used.
 
 If not specified, the F<GSTEMPLATE> enfironment variable is used.
 
-If neither B<--template> no F<GSTEMPLATE> is define, F<gs_config_template.txt>
+If neither B<--template> nor F<GSTEMPLATE> is defined, F<gs_config_template.txt>
 is used.  This can be a softlink to the current template version, which changes with each
 firmware release.
 
