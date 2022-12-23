@@ -8,7 +8,7 @@ use strict;
 my $copyright =
     "Copyright (c) 2022 Timothe Litt litt _at acm.org\nUse --man for license.";
 
-our $VERSION = 'V0.0.2';
+our $VERSION = 'V0.0.3';
 
 my $default_template = 'gs_config_template.txt';
 
@@ -20,12 +20,13 @@ use XML::Simple;
 
 my $SELF = basename( $0 );
 
-my( $extra, $header, $keep, $template, $replace, $help, $man, $version );
+my( $extra, $header, $keep, $template, $remark, $replace, $help, $man, $version );
 
 GetOptions(
         'extra|x!'   => \$extra,
         'header|h!'  => \$header,
         'keep|k!'    => \$keep,
+        'remark=s'   => \$remark,
         'replace|r!' => \$replace,
         'template|t' => \$template,
         'help|h'     => \$help,
@@ -62,6 +63,26 @@ unless( defined $template ) {
 }
 $template = realpath( $template );
 $header   = 1 unless( defined $header );
+
+if( defined $remark && length $remark ) {
+    if( $remark =~ /\@(.*$)/ ) {
+        open( my $r, '<', $1 ) or die( "$1: $!\n" );
+        local $/;
+        $remark = <$r>;
+        close( $r );
+        $remark = '' unless( defined $remark );
+    }
+    my @r = split( /\r?\n/, $remark );
+    my $w = 0;
+    foreach( @r ) {
+        $w = length if( length > $w );
+    }
+    $remark = "#-# " . '*' x $w . " #\n";
+    foreach( @r ) {
+        $remark .= sprintf( "#-# %-*.*s *\n", $w, $w, $_ );
+    }
+    $remark .= "#-# " . '*' x $w . " #\n";
+}
 
 open( my $t, '<', $template ) or die( "$template: $!\n" );
 
@@ -122,6 +143,7 @@ while( @ARGV ) {
                       $mac,       ' ' x ($w - length( $mac )), $ws );
         #>>>
     }
+    print $txt ( $remark ) if( defined $remark && length $remark );
 
     while( <$t> ) {
         if( /^\s*(?:#\s*)?(P\d+)\s*=\s*(.*?)\s*$/ ) {
@@ -168,7 +190,7 @@ gsxml2txt - update Grandstream device template from XML configuration.
 
  gsxml2txt [options] file.xml [...]
 
-      --extra  --header  --keep     --replace  --template
+      --extra  --header  --keep     --remark  --replace  --template
       --help   --man     --version
 
 =head1 DESCRIPTION
@@ -217,6 +239,14 @@ Include a traceability header in the output file.  (default)
 When generating an output filename, keep the path of the input file.
 
 The default is to write the output files to the current working directory.
+
+=item B<--remark>=I<STRING>
+
+Include I<STRING> as a comment in the output file.  I<STRING> can be be more
+than one line.
+
+If string begins with F<@>, the remainder of the string is used as a filename
+containing the remark.
 
 =item B<-r> B<--replace>
 
