@@ -12,4 +12,6 @@
 tmp/*
 *.tgz
 *.sig
-*.tar.gz *.tar.xz
+*.tar
+*.tar.gz
+*.tar.xz
