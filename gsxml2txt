@@ -6,9 +6,9 @@ use warnings;
 use strict;
 
 my $copyright =
-    "Copyright (c) 2022 Timothe Litt litt _at acm.org\nUse --man for license.";
+    "Copyright (c) 2022-20224 Timothe Litt litt _at acm.org\nUse --man for license.";
 
-our $VERSION = 'V0.0.3';
+our $VERSION = 'V0.0.4';
 
 my $default_template = 'gs_config_template.txt';
 
@@ -23,15 +23,15 @@ my $SELF = basename( $0 );
 my( $extra, $header, $keep, $template, $remark, $replace, $help, $man, $version );
 
 GetOptions(
-        'extra|x!'   => \$extra,
-        'header|h!'  => \$header,
-        'keep|k!'    => \$keep,
-        'remark=s'   => \$remark,
-        'replace|r!' => \$replace,
-        'template|t' => \$template,
-        'help|h'     => \$help,
-        'man'        => \$man,
-        'version|v'  => \$version,
+        'extra|x!'     => \$extra,
+        'header|h!'    => \$header,
+        'keep|k!'      => \$keep,
+        'remark=s'     => \$remark,
+        'replace|r!'   => \$replace,
+        'template|t=s' => \$template,
+        'help|h'       => \$help,
+        'man'          => \$man,
+        'version|v'    => \$version,
           ) or die( "Error in command\n" );
 
 # Handle help, man, & version
@@ -288,7 +288,7 @@ Timothe Litt  E<lt>litt@acm.orgE<gt>
 
 =head1 COPYRIGHT and LICENSE
 
-Copyright (c) 2022 Timothe Litt
+Copyright (c) 2022-2024 Timothe Litt
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
